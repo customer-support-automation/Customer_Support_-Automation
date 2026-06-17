@@ -35,7 +35,7 @@ A smart ticket management system that uses AI to automatically categorize, prior
 - **Authentication**: JWT
 - **Background Jobs**: Inngest
 - **AI Integration**: Google Gemini API
-- **Email**: Nodemailer with Mailtrap
+- **Email**: Nodemailer with Gmail SMTP
 - **Development**: Nodemon for hot reloading
 
 

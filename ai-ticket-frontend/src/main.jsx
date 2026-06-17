@@ -8,6 +8,7 @@ import Tickets from "./pages/tickets.jsx";
 import TicketDetailsPage from "./pages/ticket.jsx";
 import Login from "./pages/login.jsx";
 import Signup from "./pages/signup.jsx";
+import VerifyEmail from "./pages/verify-email.jsx";
 import Admin from "./pages/admin.jsx";
 import Navbar from "./components/navbar.jsx";
 
@@ -45,6 +46,14 @@ createRoot(document.getElementById("root")).render(
           element={
             <CheckAuth protectedRoute={false}>
               <Signup />
+            </CheckAuth>
+          }
+        />
+        <Route
+          path="/verify-email"
+          element={
+            <CheckAuth protectedRoute={false}>
+              <VerifyEmail />
             </CheckAuth>
           }
         />
