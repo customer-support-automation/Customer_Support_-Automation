@@ -4,209 +4,329 @@ import User from "../../models/user.js";
 import { NonRetriableError } from "inngest";
 import { sendMail } from "../../utils/mailer.js";
 import analyzeTicket from "../../utils/ai.js";
-
-// export const onTicketCreated = inngest.createFunction(
-//   { id: "on-ticket-created", retries: 2 },
-//   { event: "ticket/created" },
-//   async ({ event, step }) => {
-//     try {
-//       const { ticketId } = event.data;
-
-//       //fetch ticket from DB
-//       const ticket = await step.run("fetch-ticket", async () => {
-//         const ticketObject = await Ticket.findById(ticketId);
-//         if (!ticketObject) {
-//           throw new NonRetriableError("Ticket not found");
-//         }
-//         return ticketObject;
-//       });
-
-//       await step.run("update-ticket-status", async () => {
-//         await Ticket.findByIdAndUpdate(ticket._id, { status: "TODO" });
-//       });
-
-//       const aiResponse = await analyzeTicket(ticket);
-//         const relatedskills = await step.run("update-ticket-data", async () => {
-//         let skills = [];
-//         if (aiResponse) {
-//               const validatedPriority = !["low", "medium", "high"].includes(aiResponse.priority?.toLowerCase())
-//               ? "medium"
-//               : aiResponse.priority.toLowerCase();
-
-//           await Ticket.findByIdAndUpdate(ticket._id, {
-//             priority: validatedPriority,
-//             helpfulNotes: aiResponse.helpfulNotes || null,
-//             status: "IN_PROGRESS", // Now the status updates correctly
-//             relatedSkills: aiResponse.relatedSkills || [],
-//           });
-//           skills = aiResponse.relatedSkills || [];
-//         }
-//         return skills;
-//       });
-
-//       // 4. ASSIGN MODERATOR
-//       const moderator = await step.run("assign-moderator", async () => {
-//         // The primary logic: find a moderator whose skills match ANY of the ticket's skills
-//         // Fix for multiple moderators: Sort by assigned ticket count to pick the least busy one.
-//         // We will use the $all operator to ensure ALL skills are matched, but since you want ANY match, we stick to the regex but make the query better.
-        
-//         // Find a moderator who possesses at least one of the required skills
-//         let user = await User.findOne({
-//             role: "moderator",
-//             skills: { $in: relatedskills }, // $in is cleaner than complex regex for a list
-//         })
-//         .sort({ ticketsAssignedCount: 1 }) // Assuming you'll add a counter for load balancing
-//         .exec();
-        
-//         // Fallback logic: If no skilled moderator, assign to an admin
-//         if (!user) {
-//           user = await User.findOne({
-//             role: "admin",
-//           });
-//         }
-
-//         // Update the assignedTo field and the moderator's assigned ticket count
-//         await Ticket.findByIdAndUpdate(ticket._id, {
-//           assignedTo: user?._id || null,
-//         });
-        
-//         // Optional: Increment the assigned moderator's ticket count for load balancing
-//         if (user) {
-//             await User.findByIdAndUpdate(user._id, { $inc: { ticketsAssignedCount: 1 } });
-//         }
-        
-//         return user;
-//       });
-
-//       // console.log("aiResponse Data:", aiResponse);
-//       // const relatedskills = await step.run("ai-processing", async () => {
-//       //   let skills = [];
-//       //   if (aiResponse) {
-//       //     await Ticket.findByIdAndUpdate(ticket._id, {
-//       //       priority: !["low", "medium", "high"].includes(aiResponse.priority)
-//       //         ? "medium"
-//       //         : aiResponse.priority,
-//       //       helpfulNotes: aiResponse.helpfulNotes,
-//       //       status: "IN_PROGRESS",
-//       //       relatedSkills: aiResponse.relatedSkills,
-//       //     });
-//       //     skills = aiResponse.relatedSkills;
-//       //   }
-//       //   return skills;
-//       // });
-
-//       // const moderator = await step.run("assign-moderator", async () => {
-//       //   let user = await User.findOne({
-//       //     role: "moderator",
-//       //     skills: {
-//       //       $elemMatch: {
-//       //         $regex: relatedskills.join("|"),
-//       //         $options: "i",
-//       //       },
-//       //     },
-//       //   });
-//       //   if (!user) {
-//       //     user = await User.findOne({
-//       //       role: "admin",
-//       //     });
-//       //   }
-//       //   await Ticket.findByIdAndUpdate(ticket._id, {
-//       //     assignedTo: user?._id || null,
-//       //   });
-//       //   return user;
-//       // });
-
-//       await step.run("send-email-notification", async () => {
-//         if (moderator) {
-//           const finalTicket = await Ticket.findById(ticket._id);
-//           await sendMail(
-//             moderator.email,
-//             "Ticket Assigned",
-//             `A new ticket is assigned to you ${finalTicket.title}`
-//           );
-//         }
-//       });
-
-//       return { success: true };
-//     } catch (err) {
-//       console.error("❌ Error running the step", err.message);
-//       return { success: false };
-//     }
-//   }
-// );
-
-
-// inngest/functions/onTicketCreated.js
-
-// ... imports
-// inngest/functions/onTicketCreated.js
-
-// ... (imports)
-
 export const onTicketCreated = inngest.createFunction(
-  { id: "on-ticket-created", retries: 2 },
-  { event: "ticket/created" },
-  async ({ event, step }) => {
-    try {
-      const { ticketId } = event.data;
+  { id: "on-ticket-created", 
+    retries: 2,
+    triggers: [{ event: "ticket/created" }], 
+},
+  
+  async ({ event, step }) => {
+    console.log("🚀 TICKET FUNCTION STARTED");
+    console.log("FULL EVENT:", JSON.stringify(event, null, 2));
+    try {
+      const { ticketId, createdBy } = event.data;
+      console.log("ticketId:", ticketId);
+      console.log("createdBy:", createdBy);
+      // 1. FETCH TICKET
+      const ticket = await step.run("fetch-ticket", async () => {
+        const ticketObject = await Ticket.findById(ticketId).lean();
+        if (!ticketObject) {
+          throw new NonRetriableError("Ticket not found");
+        }
+        return ticketObject;
+      });
+      console.log("TICKET:", ticket);
+      // 2. FETCH TICKET CREATOR (for confirmation email)
+      const ticketCreator = await step.run("fetch-creator", async () => {
+        try {
+          const creator = await User.findById(createdBy);
+          return creator;
+        } catch (error) {
+          console.error(`Failed to fetch creator ${createdBy}:`, error.message);
+          return null;
+        }
+      });
+      console.log("TICKET CREATOR:", ticketCreator);
+      console.log("EMAIL:", ticketCreator?.email);
 
-      // 1. FETCH TICKET
-      const ticket = await step.run("fetch-ticket", async () => {
-        // FIX 1: Use .lean() to ensure a plain JS object is returned from MongoDB,
-        // which avoids Mongoose serialization issues between steps.
-        const ticketObject = await Ticket.findById(ticketId).lean(); 
-        if (!ticketObject) {
-          throw new NonRetriableError("Ticket not found");
-        }
-        return ticketObject;
-      });
-      
-      // 2. AI PROCESSING STEP
-      const aiResult = await step.run("ai-triage", async () => {
-        // Use the string version of the ID for logging
-        console.log("Sending ticket to AI for analysis:", ticket._id.toString());
-        
-        // FIX 2: Since 'ticket' is now a lean object, REMOVE .toObject()
-        const aiResponse = await analyzeTicket(ticket); 
-        
-        // Return the AI response and the ticket ID for the next step
-        return { 
-            aiResponse, 
-            // Use the string version of the ID for guaranteed serialization
-            ticketMongooseId: ticket._id.toString()
-        };
-      });
-      
+      // 3. SEND CONFIRMATION EMAIL TO TICKET CREATOR
+      console.log("ENTERED EMAIL STEP");
+      await step.run("send-confirmation-email", async () => {
+        if (ticketCreator) {
+          try {
+            const confirmationEmail = `
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <style>
+                    body { font-family: 'Arial', sans-serif; background-color: #f5f5f5; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { padding: 20px; line-height: 1.6; }
+                    .ticket-info { background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+                    .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>Ticket Received ✓</h1>
+                    </div>
+                    <div class="content">
+                      <p>Hi ${ticketCreator.email.split("@")[0]},</p>
+                      <p>Thank you for submitting your support ticket. We've received it and our team is already working on it.</p>
+                      <div class="ticket-info">
+                        <strong>Ticket Details:</strong><br>
+                        <strong>ID:</strong> ${ticket._id.toString().slice(0, 8).toUpperCase()}<br>
+                        <strong>Title:</strong> ${ticket.title}<br>
+                        <strong>Status:</strong> Under Review<br>
+                        <strong>Created:</strong> ${new Date(ticket.createdAt).toLocaleDateString()}
+                      </div>
+                      <p>Our support team will review your ticket and get back to you shortly.</p>
+                      <p>Best regards,<br>AI Ticket Assistant Team</p>
+                    </div>
+                    <div class="footer">
+                      <p>&copy; 2024 AI Ticket Assistant. All rights reserved.</p>
+                    </div>
+                  </div>
+                </body>
+              </html>
+            `;
+            await sendMail(
+              ticketCreator.email,
+              `Ticket Confirmed - #${ticket._id.toString().slice(0, 8).toUpperCase()}`,
+              confirmationEmail
+            );
+            console.log(`✅ Confirmation email sent to ${ticketCreator.email}`);
+          } catch (error) {
+            console.error(`❌ Failed to send confirmation email:`, error.message);
+            // Don't throw - email failure should not break ticket processing
+          }
+        }
+      });
+
+      // 4. AI PROCESSING STEP
+      const aiResult = await step.run("ai-triage", async () => {
+        try {
+          console.log("Sending ticket to AI for analysis:", ticket._id.toString());
+          const aiResponse = await analyzeTicket(ticket);
+          return {
+            aiResponse,
+            ticketMongooseId: ticket._id.toString(),
+          };
+        } catch (error) {
+          console.error("AI analysis failed:", error.message);
+          return {
+            aiResponse: null,
+            ticketMongooseId: ticket._id.toString(),
+          };
+        }
+      });
+
       const { aiResponse, ticketMongooseId } = aiResult;
-      
-      // 3. UPDATE TICKET STATUS AND DATA FROM AI
-      const relatedskills = await step.run("update-ticket-data", async () => {
-        // ... (rest of the logic remains the same, using ticketMongooseId)
-        let updateFields = {
-          status: "IN_PROGRESS",
-        };
-        // ... (AI validation logic, setting updateFields)
-        
-        // Use the string ID for the update
-        const updatedTicket = await Ticket.findByIdAndUpdate(
-          ticketMongooseId, // Use the guaranteed string ID
-          updateFields, 
-          { new: true, runValidators: true }
-        );
-        
-        // ... (error check and return skills)
-        if (!updatedTicket) {
-          throw new NonRetriableError(`DB UPDATE FAILED: Ticket document not found for ID: ${ticketMongooseId}`);
-        }
-        console.log(`✅ Ticket ${ticketMongooseId} status successfully updated to: ${updatedTicket.status}`);
 
-        return skills;
-      });
+      // 5. UPDATE TICKET STATUS AND DATA FROM AI
+      const relatedskills = await step.run("update-ticket-data", async () => {
+        try {
+          let updateFields = {
+            status: "IN_PROGRESS",
+          };
 
-      // ... (rest of the function, assign-moderator, etc.)
-    } catch (err) {
-      console.error("❌ Error running the step", err); 
-      return { success: false };
-    }
-  }
+          let skills = [];
+          if (aiResponse && aiResponse.priority) {
+            const validatedPriority = !["low", "medium", "high"].includes(
+              aiResponse.priority?.toLowerCase()
+            )
+              ? "medium"
+              : aiResponse.priority.toLowerCase();
+
+            updateFields = {
+              ...updateFields,
+              priority: validatedPriority,
+              helpfulNotes: aiResponse.helpfulNotes || null,
+              relatedSkills: aiResponse.relatedSkills || [],
+            };
+            skills = aiResponse.relatedSkills || [];
+          }
+
+          const updatedTicket = await Ticket.findByIdAndUpdate(
+            ticketMongooseId,
+            updateFields,
+            { new: true, runValidators: true }
+          );
+
+          if (!updatedTicket) {
+            throw new NonRetriableError(
+              `DB UPDATE FAILED: Ticket not found for ID: ${ticketMongooseId}`
+            );
+          }
+          console.log(
+            `✅ Ticket ${ticketMongooseId} updated - Priority: ${updateFields.priority}, Status: ${updateFields.status}`
+          );
+
+          return skills;
+        } catch (error) {
+          console.error("Failed to update ticket:", error.message);
+          return [];
+        }
+      });
+
+      // 6. ASSIGN MODERATOR
+      const moderator = await step.run("assign-moderator", async () => {
+        try {
+          // Find a moderator with matching skills
+          let user = await User.findOne({
+            role: "moderator",
+            skills: { $in: relatedskills },
+          })
+            .sort({ ticketsAssignedCount: 1 })
+            .exec();
+
+          // Fallback to admin if no moderator found
+          if (!user) {
+            user = await User.findOne({ role: "admin" });
+          }
+
+          if (user) {
+            await Ticket.findByIdAndUpdate(ticketMongooseId, {
+              assignedTo: user._id,
+            });
+
+            await User.findByIdAndUpdate(user._id, {
+              $inc: { ticketsAssignedCount: 1 },
+            });
+          }
+
+          return user;
+        } catch (error) {
+          console.error("Failed to assign moderator:", error.message);
+          return null;
+        }
+      });
+
+      // 7. SEND NOTIFICATION EMAIL TO ASSIGNED MODERATOR
+      await step.run("send-moderator-email", async () => {
+        if (moderator) {
+          try {
+            const finalTicket = await Ticket.findById(ticketMongooseId);
+            const moderatorEmail = `
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <style>
+                    body { font-family: 'Arial', sans-serif; background-color: #f5f5f5; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { padding: 20px; line-height: 1.6; }
+                    .ticket-info { background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+                    .notes { background: #fff9e6; padding: 15px; border-left: 4px solid #ffc107; margin: 15px 0; border-radius: 4px; }
+                    .priority { display: inline-block; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+                    .priority-high { background: #ff6b6b; color: white; }
+                    .priority-medium { background: #ffc107; color: black; }
+                    .priority-low { background: #28a745; color: white; }
+                    .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>New Ticket Assigned 📬</h1>
+                    </div>
+                    <div class="content">
+                      <p>Hi ${moderator.email.split("@")[0]},</p>
+                      <p>A new ticket has been assigned to you based on your expertise.</p>
+                      <div class="ticket-info">
+                        <strong>Ticket Details:</strong><br>
+                        <strong>ID:</strong> ${finalTicket._id.toString().slice(0, 8).toUpperCase()}<br>
+                        <strong>Title:</strong> ${finalTicket.title}<br>
+                        <strong>Description:</strong> ${finalTicket.description.substring(0, 150)}${finalTicket.description.length > 150 ? "..." : ""}<br>
+                        <strong>Priority:</strong> <span class="priority priority-${finalTicket.priority}">${finalTicket.priority?.toUpperCase() || "MEDIUM"}</span><br>
+                        <strong>Created:</strong> ${new Date(finalTicket.createdAt).toLocaleDateString()}
+                      </div>
+                      ${finalTicket.helpfulNotes ? `<div class="notes"><strong>📝 AI-Generated Notes:</strong><br>${finalTicket.helpfulNotes}</div>` : ""}
+                      ${finalTicket.relatedSkills && finalTicket.relatedSkills.length > 0 ? `<p><strong>Related Skills:</strong> ${finalTicket.relatedSkills.join(", ")}</p>` : ""}
+                      <p>Please review the ticket and respond to the customer as soon as possible.</p>
+                      <p>Best regards,<br>AI Ticket Assistant Team</p>
+                    </div>
+                    <div class="footer">
+                      <p>&copy; 2024 AI Ticket Assistant. All rights reserved.</p>
+                    </div>
+                  </div>
+                </body>
+              </html>
+            `;
+            await sendMail(
+              moderator.email,
+              `New Ticket Assigned - #${finalTicket._id.toString().slice(0, 8).toUpperCase()}`,
+              moderatorEmail
+            );
+            console.log(
+              `✅ Ticket assignment email sent to moderator ${moderator.email}`
+            );
+          } catch (error) {
+            console.error(
+              `❌ Failed to send moderator notification email:`,
+              error.message
+            );
+            // Don't throw - email failure should not break ticket processing
+          }
+        }
+      });
+
+      // 8. SEND NOTIFICATION EMAIL TO ADMIN
+      await step.run("send-admin-email", async () => {
+        try {
+          const admin = await User.findOne({ role: "admin" });
+          if (admin) {
+            const adminEmail = `
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <style>
+                    body { font-family: 'Arial', sans-serif; background-color: #f5f5f5; }
+                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { padding: 20px; line-height: 1.6; }
+                    .ticket-info { background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+                    .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>New Ticket Created 📋</h1>
+                    </div>
+                    <div class="content">
+                      <p>Hi Admin,</p>
+                      <p>A new support ticket has been created in the system.</p>
+                      <div class="ticket-info">
+                        <strong>Ticket Details:</strong><br>
+                        <strong>ID:</strong> ${ticket._id.toString().slice(0, 8).toUpperCase()}<br>
+                        <strong>Title:</strong> ${ticket.title}<br>
+                        <strong>Created By:</strong> ${ticketCreator?.email || "Unknown"}<br>
+                        <strong>Assigned To:</strong> ${moderator?.email || "Unassigned"}<br>
+                        <strong>Status:</strong> In Progress<br>
+                        <strong>Created:</strong> ${new Date(ticket.createdAt).toLocaleDateString()}
+                      </div>
+                      <p>Best regards,<br>AI Ticket Assistant System</p>
+                    </div>
+                    <div class="footer">
+                      <p>&copy; 2024 AI Ticket Assistant. All rights reserved.</p>
+                    </div>
+                  </div>
+                </body>
+              </html>
+            `;
+            await sendMail(
+              admin.email,
+              `New Ticket Created - #${ticket._id.toString().slice(0, 8).toUpperCase()}`,
+              adminEmail
+            );
+            console.log(`✅ Admin notification email sent to ${admin.email}`);
+          }
+        } catch (error) {
+          console.error(
+            `❌ Failed to send admin notification email:`,
+            error.message
+          );
+          // Don't throw - email failure should not break ticket processing
+        }
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error("❌ Error running ticket creation workflow:", err);
+      return { success: false };
+    }
+  }
 );

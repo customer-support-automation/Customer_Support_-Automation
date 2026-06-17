@@ -3,6 +3,7 @@ import Ticket from "../models/ticket.js";
 import mongoose from "mongoose";
 
 export const createTicket = async (req, res) => {
+  // console.log("🚀 TICKET FUNCTION STARTED");
   try {
     const { title, description } = req.body;
     if (!title || !description) {
@@ -15,8 +16,8 @@ export const createTicket = async (req, res) => {
       description,
       createdBy: req.user._id.toString(),
     });
-
-    await inngest.send({
+    // console.log("🔥 SENDING EVENT");
+    const result=await inngest.send({
       name: "ticket/created",
       data: {
         ticketId: (await newTicket)._id.toString(),
@@ -25,6 +26,7 @@ export const createTicket = async (req, res) => {
         createdBy: req.user._id.toString(),
       },
     });
+    // console.log("🔥 EVENT RESULT:", result);
     return res.status(201).json({
       message: "Ticket created and processing started",
       ticket: newTicket,

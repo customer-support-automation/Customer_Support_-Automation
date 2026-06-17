@@ -5,6 +5,8 @@ import {
   signup,
   updateUser,
   logout,
+  verifyEmail,
+  resendOtp,
 } from "../controllers/user.js";
 
 import { authenticate } from "../middlewares/auth.js";
@@ -16,5 +18,7 @@ router.get("/users", authenticate, getUsers);
 router.post("/signup", signup);
 router.post("/login", login);
 router.post("/logout", logout);
+router.post("/verify-email", verifyEmail);
+router.post("/resend-otp", resendOtp);
 
 export default router;
