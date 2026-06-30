@@ -1,12 +1,11 @@
 import { useState } from "react";
+import { API_BASE } from "../utils/apiBase";
 
 export default function ResolutionForm({ ticketId, onResolved }) {
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem("token");
-  const BASE = import.meta.env.VITE_SERVER_URL;
-
   const handleResolve = async () => {
     if (note.trim().length < 10) {
       alert("Please write a resolution note (minimum 10 characters)");
@@ -14,7 +13,7 @@ export default function ResolutionForm({ ticketId, onResolved }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/tickets/${ticketId}/resolve`, {
+      const res = await fetch(`${API_BASE}/api/tickets/${ticketId}/resolve`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

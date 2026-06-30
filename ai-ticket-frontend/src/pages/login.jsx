@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../utils/apiBase";
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -22,7 +23,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/login`,
+        `${API_BASE}/api/auth/login`,
         {
           method: "POST",
           headers: {
@@ -61,7 +62,7 @@ export default function LoginPage() {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/resend-otp`,
+        `${API_BASE}/api/auth/resend-otp`,
         {
           method: "POST",
           headers: {

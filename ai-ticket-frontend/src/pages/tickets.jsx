@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE } from "../utils/apiBase";
 
 export default function Tickets() {
   const [form, setForm] = useState({ title: "", description: "" });
@@ -7,11 +8,9 @@ export default function Tickets() {
   const [loading, setLoading] = useState(false);
 
   const token = localStorage.getItem("token");
-  const BASE = import.meta.env.VITE_SERVER_URL;
-
   const fetchTickets = async () => {
     try {
-      const res = await fetch(`${BASE}/api/tickets`, {
+      const res = await fetch(`${API_BASE}/api/tickets`, {
         headers: { Authorization: `Bearer ${token}` },
         method: "GET",
       });
@@ -48,7 +47,7 @@ export default function Tickets() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/tickets`, {
+      const res = await fetch(`${API_BASE}/api/tickets`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

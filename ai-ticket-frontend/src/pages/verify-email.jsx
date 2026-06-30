@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { API_BASE } from "../utils/apiBase";
 
 export default function VerifyEmailPage() {
   const [otp, setOtp] = useState("");
@@ -37,7 +38,7 @@ export default function VerifyEmailPage() {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/verify-email`,
+        `${API_BASE}/api/auth/verify-email`,
         {
           method: "POST",
           headers: {
@@ -73,7 +74,7 @@ export default function VerifyEmailPage() {
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/resend-otp`,
+        `${API_BASE}/api/auth/resend-otp`,
         {
           method: "POST",
           headers: {

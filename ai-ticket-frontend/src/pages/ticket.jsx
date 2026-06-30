@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import ResolutionForm from "../components/ResolutionForm";
+import { API_BASE } from "../utils/apiBase";
 
 export default function TicketDetailsPage() {
   const { id } = useParams();
@@ -25,7 +26,7 @@ export default function TicketDetailsPage() {
     setLoading(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/tickets/${id}`,
+        `${API_BASE}/api/tickets/${id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       let data = null;

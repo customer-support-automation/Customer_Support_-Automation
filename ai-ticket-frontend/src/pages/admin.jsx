@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "../utils/apiBase";
 
 export default function AdminPanel() {
   const [users, setUsers] = useState([]);
@@ -15,7 +16,7 @@ export default function AdminPanel() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/users`, {
+      const res = await fetch(`${API_BASE}/api/auth/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -43,7 +44,7 @@ export default function AdminPanel() {
   const handleUpdate = async () => {
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/update-user`,
+        `${API_BASE}/api/auth/update-user`,
         {
           method: "POST",
           headers: {
