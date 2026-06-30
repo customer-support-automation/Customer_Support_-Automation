@@ -34,7 +34,7 @@ A smart ticket management system that uses AI to automatically categorize, prior
 - **Database**: MongoDB
 - **Authentication**: JWT
 - **Background Jobs**: Inngest
-- **AI Integration**: Google Gemini API
+- **AI Integration**: Local Ollama with Qwen2.5-3B-Instruct
 - **Email**: Nodemailer with Gmail SMTP
 - **Development**: Nodemon for hot reloading
 
@@ -73,6 +73,7 @@ A smart ticket management system that uses AI to automatically categorize, prior
      - Priority level
      - Helpful notes
      - Ticket type
+  - Response generation is grounded locally through Ollama and Qdrant, with no external LLM API calls at runtime
 
 3. **Moderator Assignment**
 

@@ -38,9 +38,12 @@ export const signup = async (req, res) => {
       await sendOtpEmail(email, otp);
     } catch (emailError) {
       console.error("Failed to send OTP email:", emailError.message);
-      // Delete user if email fails
-      await User.deleteOne({ _id: user._id });
-      return res.status(500).json({ error: "Failed to send verification email" });
+      return res.status(201).json({
+        message:
+          "Signup successful, but we could not send the verification email. You can still log in with your password.",
+        email,
+        requiresVerification: true,
+      });
     }
 
     // Fire inngest event (don't let failures here break signup)
@@ -57,7 +60,8 @@ export const signup = async (req, res) => {
 
     res.json({ 
       message: "Signup successful. Please check your email for the verification code.",
-      email 
+      email,
+      requiresVerification: true
     });
   } catch (error) {
     console.error("Signup error:", error);
@@ -151,14 +155,6 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ error: "User not found" });
 
-    // Check if email is verified
-    if (!user.isVerified) {
-      return res.status(403).json({ 
-        error: "Please verify your email before logging in",
-        requiresVerification: true
-      });
-    }
-
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -170,7 +166,11 @@ export const login = async (req, res) => {
       process.env.JWT_SECRET
     );
 
-    res.json({ user, token });
+    res.json({
+      user,
+      token,
+      requiresVerification: !user.isVerified,
+    });
   } catch (error) {
     res.status(500).json({ error: "Login failed", details: error.message });
   }

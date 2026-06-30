@@ -20,7 +20,8 @@ const DEPARTMENTS = [
 
 const PRIORITY_LABELS = ["low", "medium", "high"];
 
-const PRIORITY_MODEL_DIR = path.join(__dirname, "../models/priority_model_onnx");
+const PRIORITY_MODEL_DIR =
+  process.env.PRIORITY_MODEL_DIR || path.join(__dirname, "../models/priority_roberta_onnx");
 const PRIORITY_MODEL_PATH = path.join(PRIORITY_MODEL_DIR, "model.onnx");
 
 let _classifier = null;
@@ -69,7 +70,7 @@ async function getPriorityModel() {
   if (!_prioritySession) {
     try {
       _ort = await import("onnxruntime-node");
-      console.log("Loading DistilBERT priority model...");
+      console.log("Loading RoBERTa priority model...");
       _prioritySession = await _ort.InferenceSession.create(PRIORITY_MODEL_PATH);
       _priorityTokenizer = await AutoTokenizer.from_pretrained(PRIORITY_MODEL_DIR);
       console.log("Priority model ready");
@@ -149,7 +150,7 @@ async function scorePriority(title, description) {
     return priority;
   } catch (err) {
     if (!_priorityDisabled) {
-      console.error("DistilBERT priority failed, using fallback:", err.message);
+      console.error("RoBERTa priority failed, using fallback:", err.message);
     }
     return fallbackPriority(title, description);
   }

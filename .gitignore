@@ -2,7 +2,7 @@ ai-ticket-assistant/.env
 ai-ticket-assistant/node_modules
 ai-ticket-frontend/node_modules
 ai-ticket-frontend/.env
-
+ai-ticket-assistant/models/priority_roberta_onnx/
 node_modules/
 .env
 .env.*

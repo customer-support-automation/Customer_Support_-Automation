@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-
-dotenv.config();
+import "dotenv/config";
 
 import express from "express";
 import mongoose from "mongoose";
@@ -12,6 +10,8 @@ import { inngest } from "./inngest/client.js";
 import { onUserSignup } from "./inngest/functions/on-signup.js";
 import { onTicketCreated } from "./inngest/functions/on-ticket-create.js";
 import { onTicketResolved } from "./inngest/functions/on-ticket-resolve.js";
+import { syncResolvedTickets } from "./inngest/functions/sync-resolved-tickets.js";
+import { checkOllamaHealth } from "./utils/llmService.js";
 
 const requiredEnv = ["MONGO_URI", "JWT_SECRET", "GMAIL_USER", "GMAIL_APP_PASSWORD"];
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
@@ -54,7 +54,7 @@ app.use(
   "/api/inngest",
   serve({
     client: inngest,
-    functions: [onUserSignup, onTicketCreated, onTicketResolved],
+    functions: [onUserSignup, onTicketCreated, onTicketResolved, syncResolvedTickets],
   })
 );
 
@@ -63,5 +63,12 @@ mongoose
   .then(() => {
     console.log("MongoDB connected ✅");
     app.listen(PORT, () => console.log(`🚀 Server at http://localhost:${PORT}`));
+    checkOllamaHealth().then((healthy) => {
+      if (healthy) {
+        console.log("Ollama local LLM server is reachable");
+      } else {
+        console.warn("WARNING: Ollama is not reachable. LLM-generated responses will fall back to retrieval-only mode.");
+      }
+    });
   })
   .catch((err) => console.error("❌ MongoDB error:", err.message));

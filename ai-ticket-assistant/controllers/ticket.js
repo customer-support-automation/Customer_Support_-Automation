@@ -16,17 +16,20 @@ export const createTicket = async (req, res) => {
       description,
       createdBy: req.user._id.toString(),
     });
-    // console.log("🔥 SENDING EVENT");
-    const result=await inngest.send({
-      name: "ticket/created",
-      data: {
-        ticketId: (await newTicket)._id.toString(),
-        title,
-        description,
-        createdBy: req.user._id.toString(),
-      },
-    });
-    // console.log("🔥 EVENT RESULT:", result);
+    // Keep ticket creation successful even if background processing is temporarily unavailable.
+    try {
+      await inngest.send({
+        name: "ticket/created",
+        data: {
+          ticketId: newTicket._id.toString(),
+          title,
+          description,
+          createdBy: req.user._id.toString(),
+        },
+      });
+    } catch (eventError) {
+      console.error("Failed to queue ticket processing event:", eventError.message);
+    }
     return res.status(201).json({
       message: "Ticket created and processing started",
       ticket: newTicket,
