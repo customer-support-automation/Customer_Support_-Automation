@@ -54,93 +54,124 @@ export default function TicketDetailsPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-6">
-      <h2 className="text-2xl font-semibold text-gray-900 mb-6">Ticket Details</h2>
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-4">
-        <h3 className="text-xl font-semibold text-gray-900">{ticket.title}</h3>
-        <p className="text-gray-600 text-sm leading-relaxed">{ticket.description}</p>
+      <h2 className="text-xl font-semibold text-gray-900 mb-5">Ticket Details</h2>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-gray-900">{ticket.title}</h3>
+        <p className="text-sm text-gray-600 mt-2 leading-relaxed">{ticket.description}</p>
 
         {ticket.status && (
-          <>
-            <div className="divider text-xs text-gray-400">Ticket Info</div>
-
-            <p className="text-sm text-gray-700">
-              <span className="font-medium text-gray-900">Status:</span>{" "}
-              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                ticket.status === "RESOLVED" ? "bg-green-100 text-green-700" :
-                ticket.status === "IN_PROGRESS" ? "bg-yellow-100 text-yellow-700" :
-                "bg-gray-100 text-gray-600"
-              }`}>{ticket.status}</span>
-            </p>
-
-            {ticket.priority && (
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Priority:</span>{" "}
-                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                  ticket.priority === "high" ? "bg-red-100 text-red-700" :
-                  ticket.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
-                  "bg-green-100 text-green-700"
-                }`}>{ticket.priority}</span>
-              </p>
-            )}
-
-            {ticket.ticketType && (
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Type:</span> {ticket.ticketType}
-              </p>
-            )}
-            {ticket.department && (
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Department:</span> {ticket.department}
-              </p>
-            )}
-
-            {ticket.assignedTo && (
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Assigned To:</span> {ticket.assignedTo?.email}
-              </p>
-            )}
-
-            {ticket.resolutionNote && (
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">Resolution Note</p>
-                <p className="text-sm text-gray-700">{ticket.resolutionNote}</p>
-                {ticket.resolvedAt && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    Resolved {new Date(ticket.resolvedAt).toLocaleString()}
-                  </p>
-                )}
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Ticket Info</p>
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-500 w-28 shrink-0">Status</span>
+                <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  ticket.status === "RESOLVED" ? "bg-green-100 text-green-700" :
+                  ticket.status === "IN_PROGRESS" ? "bg-yellow-100 text-yellow-700" :
+                  "bg-gray-100 text-gray-600"
+                }`}>{ticket.status.replace("_", " ")}</span>
               </div>
-            )}
 
-            {user?.role !== "user" && ticket.similarTickets?.length > 0 && (
-              <div className="mt-4">
-                <div className="divider text-xs text-gray-400">Similar Past Tickets</div>
-                <div className="space-y-2">
-                  {ticket.similarTickets.map((t, i) => (
-                    <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                      <p className="text-sm font-medium text-gray-900">
-                        {t.title}
-                        <span className="text-xs text-gray-400 font-normal ml-2">
-                          {Math.round(t.score * 100)}% match
-                        </span>
-                      </p>
-                      {t.response && (
-                        <p className="text-xs text-gray-500 mt-1">{t.response}</p>
-                      )}
-                    </div>
-                  ))}
+              {ticket.priority && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-28 shrink-0">Priority</span>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    ticket.priority === "high" ? "bg-red-100 text-red-700" :
+                    ticket.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
+                    "bg-green-100 text-green-700"
+                  }`}>{ticket.priority}</span>
+                </div>
+              )}
+
+              {ticket.ticketType && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-28 shrink-0">Type</span>
+                  <span className="text-sm text-gray-700">{ticket.ticketType}</span>
+                </div>
+              )}
+
+              {ticket.department && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-28 shrink-0">Department</span>
+                  <span className="text-sm text-gray-700">{ticket.department}</span>
+                </div>
+              )}
+
+              {ticket.assignedTo && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-28 shrink-0">Assigned To</span>
+                  <span className="text-sm text-gray-700">{ticket.assignedTo?.email}</span>
+                </div>
+              )}
+
+              {ticket.createdAt && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500 w-28 shrink-0">Created</span>
+                  <span className="text-sm text-gray-500">{new Date(ticket.createdAt).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {user?.role !== "user" && (
+          <>
+            {ticket.helpfulNotes && (
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Helpful Notes</p>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-xs text-amber-600 mb-2">From similar resolved tickets in the knowledge base</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line">{ticket.helpfulNotes}</p>
                 </div>
               </div>
             )}
 
-            {user?.role !== "user" && ticket.status !== "RESOLVED" && (
+            {ticket.status !== "RESOLVED" && (
               <ResolutionForm ticketId={ticket._id} onResolved={fetchTicket} />
             )}
 
-            {ticket.createdAt && (
-              <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
-                Created {new Date(ticket.createdAt).toLocaleString()}
-              </p>
+            {ticket.resolutionNote && ticket.status === "RESOLVED" && (
+              <div className="mt-5 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Internal Resolution Note</p>
+                <p className="text-sm text-gray-700">{ticket.resolutionNote}</p>
+                {ticket.resolvedAt && (
+                  <p className="text-xs text-gray-400 mt-2">Resolved {new Date(ticket.resolvedAt).toLocaleString()}</p>
+                )}
+              </div>
+            )}
+
+            {ticket.status === "RESOLVED" && (
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <span>🔒</span>
+                  <span>This ticket is resolved and locked. To report a new issue, please create a new ticket.</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {user?.role === "user" && (
+          <>
+            {ticket.generatedResponse && ticket.status !== "RESOLVED" && (
+              <div className="mt-5 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Our Response</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{ticket.generatedResponse}</p>
+              </div>
+            )}
+
+            {ticket.status === "RESOLVED" && (
+              <div className="mt-5 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">Resolved</p>
+                <p className="text-sm text-gray-700">
+                  Thank you for reaching out. Your ticket has been reviewed and resolved
+                  by our support team. We hope this has addressed your concern. Please
+                  raise a new ticket if you need further assistance.
+                </p>
+                {ticket.resolvedAt && (
+                  <p className="text-xs text-gray-400 mt-2">Resolved {new Date(ticket.resolvedAt).toLocaleString()}</p>
+                )}
+              </div>
             )}
           </>
         )}

@@ -4,10 +4,18 @@ import { embedText } from "./ai.js";
 const COLLECTION = "tickets";
 const VECTOR_SIZE = 384;
 
+// const client = new QdrantClient({
+//   url: process.env.QDRANT_URL || "http://localhost:6333",
+//   checkCompatibility: false,
+// });
+
+
 const client = new QdrantClient({
-  url: process.env.QDRANT_URL || "http://localhost:6333",
+  url: process.env.QDRANT_URL,
+  apiKey: process.env.QDRANT_API_KEY,
   checkCompatibility: false,
 });
+
 
 export async function ensureCollection() {
   try {
@@ -30,15 +38,20 @@ export async function findSimilarTickets(text, topK = 3) {
       score_threshold: 0.5,
     });
 
-    return results.map((r) => ({
+    const all = results.map((r) => ({
       title: r.payload.title || "",
       response: r.payload.response || "",
       score: parseFloat(r.score.toFixed(3)),
       isDuplicate: r.score > 0.92,
+      fromHuman: !!r.payload.mongoId,
     }));
+
+    const humanResolved = all.filter((ticket) => ticket.fromHuman === true);
+
+    return { all, humanResolved };
   } catch (err) {
     console.error("RAG search failed:", err.message);
-    return [];
+    return { all: [], humanResolved: [] };
   }
 }
 

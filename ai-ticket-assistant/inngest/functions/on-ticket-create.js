@@ -5,6 +5,7 @@ import { NonRetriableError } from "inngest";
 import { sendMail } from "../../utils/mailer.js";
 import classifyTicket from "../../utils/ai.js";
 import { findSimilarTickets, ensureCollection } from "../../utils/rag.js";
+import { handleTicketQuery } from "../../utils/ragPipeline.js";
 export const onTicketCreated = inngest.createFunction(
   { id: "on-ticket-created", 
     retries: 2,
@@ -40,85 +41,54 @@ export const onTicketCreated = inngest.createFunction(
       console.log("TICKET CREATOR:", ticketCreator);
       console.log("EMAIL:", ticketCreator?.email);
 
-      // 3. SEND CONFIRMATION EMAIL TO TICKET CREATOR
-      console.log("ENTERED EMAIL STEP");
-      await step.run("send-confirmation-email", async () => {
-        if (ticketCreator) {
-          try {
-            const confirmationEmail = `
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <style>
-                    body { font-family: 'Arial', sans-serif; background-color: #f5f5f5; }
-                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
-                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                    .content { padding: 20px; line-height: 1.6; }
-                    .ticket-info { background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 15px 0; }
-                    .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
-                  </style>
-                </head>
-                <body>
-                  <div class="container">
-                    <div class="header">
-                      <h1>Ticket Received ✓</h1>
-                    </div>
-                    <div class="content">
-                      <p>Hi ${ticketCreator.email.split("@")[0]},</p>
-                      <p>Thank you for submitting your support ticket. We've received it and our team is already working on it.</p>
-                      <div class="ticket-info">
-                        <strong>Ticket Details:</strong><br>
-                        <strong>ID:</strong> ${ticket._id.toString().slice(0, 8).toUpperCase()}<br>
-                        <strong>Title:</strong> ${ticket.title}<br>
-                        <strong>Status:</strong> Under Review<br>
-                        <strong>Created:</strong> ${new Date(ticket.createdAt).toLocaleDateString()}
-                      </div>
-                      <p>Our support team will review your ticket and get back to you shortly.</p>
-                      <p>Best regards,<br>AI Ticket Assistant Team</p>
-                    </div>
-                    <div class="footer">
-                      <p>&copy; 2024 AI Ticket Assistant. All rights reserved.</p>
-                    </div>
-                  </div>
-                </body>
-              </html>
-            `;
-            await sendMail(
-              ticketCreator.email,
-              `Ticket Confirmed - #${ticket._id.toString().slice(0, 8).toUpperCase()}`,
-              confirmationEmail
-            );
-            console.log(`✅ Confirmation email sent to ${ticketCreator.email}`);
-          } catch (error) {
-            console.error(`❌ Failed to send confirmation email:`, error.message);
-            // Don't throw - email failure should not break ticket processing
-          }
-        }
-      });
-
-      // 4. AI PROCESSING STEP
+      // 3. AI PROCESSING STEP
       const aiResult = await step.run("ai-classify", async () => {
         try {
           await ensureCollection();
           const text = `${ticket.title} ${ticket.description}`;
-          const [classification, similarTickets] = await Promise.all([
+          const [classification, ragResult, similarTickets] = await Promise.all([
             classifyTicket(ticket),
-            findSimilarTickets(text),
+            handleTicketQuery(text),
+            findSimilarTickets(text, 3),
           ]);
-          const isDuplicate = similarTickets.some((t) => t.isDuplicate);
+          const isDuplicate = similarTickets.all.some((t) => t.isDuplicate);
           if (isDuplicate) console.log(`Possible duplicate detected: ${ticketId}`);
-          return { ...classification, similarTickets, isDuplicate };
+          return {
+            ...classification,
+            similarTickets: similarTickets.all,
+            humanSimilarTickets: similarTickets.humanResolved,
+            generatedResponse: ragResult?.response || null,
+            needsHumanReview: ragResult?.needsHumanReview || false,
+            isDuplicate,
+          };
         } catch (err) {
           console.error("ai-classify failed:", err.message);
-          return { ticketType: "Request", department: null, priority: "medium", similarTickets: [], isDuplicate: false };
+          return {
+            ticketType: "Request",
+            department: "Unclassified",
+            priority: "medium",
+            similarTickets: [],
+            humanSimilarTickets: [],
+            generatedResponse: null,
+            needsHumanReview: true,
+            isDuplicate: false,
+          };
         }
       });
 
       const ticketMongooseId = ticket._id.toString();
 
-      // 5. UPDATE TICKET STATUS AND DATA FROM AI
+      // 4. UPDATE TICKET STATUS AND DATA FROM AI
       const department = await step.run("update-ticket-data", async () => {
         try {
+          const helpfulNotes = (aiResult.humanSimilarTickets || [])
+            .filter((t) => t.response && t.response.trim().length > 0 && t.score >= 0.7)
+            .slice(0, 2)
+            .map((t, i) => `Note ${i + 1} (${Math.round(t.score * 100)}% similar):\n${t.response}`)
+            .join("\n\n");
+
+          const ticketHelpfulNotes = helpfulNotes.length > 0 ? helpfulNotes : null;
+
           const updatedTicket = await Ticket.findByIdAndUpdate(
             ticketId,
             {
@@ -126,8 +96,8 @@ export const onTicketCreated = inngest.createFunction(
               ticketType: aiResult.ticketType,
               department: aiResult.department,
               priority: aiResult.priority,
-              similarTickets: aiResult.similarTickets,
-              relatedSkills: [],
+              helpfulNotes: ticketHelpfulNotes,
+              generatedResponse: aiResult.generatedResponse,
             },
             { new: true, runValidators: true }
           );
@@ -137,6 +107,70 @@ export const onTicketCreated = inngest.createFunction(
         } catch (err) {
           console.error("update-ticket-data failed:", err.message);
           return null;
+        }
+      });
+
+      // 5. SEND CONFIRMATION EMAIL TO TICKET CREATOR
+      console.log("ENTERED EMAIL STEP");
+      await step.run("send-confirmation-email", async () => {
+        if (!ticketCreator) return;
+
+        try {
+          const responseSection = aiResult?.generatedResponse
+            ? `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;">
+                <strong style="color:#0369a1">Our initial response:</strong>
+                <p style="color:#374151;margin-top:8px;">${aiResult.generatedResponse}</p>
+              </div>`
+            : `<p style="color:#6b7280">Our team is reviewing your ticket and will update you shortly.</p>`;
+
+          const confirmationEmail = `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <style>
+                  body { font-family: 'Arial', sans-serif; background-color: #f5f5f5; }
+                  .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                  .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                  .content { padding: 20px; line-height: 1.6; }
+                  .ticket-info { background: #f0f0f0; padding: 15px; border-radius: 8px; margin: 15px 0; }
+                  .footer { text-align: center; color: #999; font-size: 12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h1>Ticket Received ✓</h1>
+                  </div>
+                  <div class="content">
+                    <p>Hi ${ticketCreator.email.split("@")[0]},</p>
+                    <p>Thank you for submitting your support ticket. We've received it and our team is already working on it.</p>
+                    <div class="ticket-info">
+                      <strong>Ticket Details:</strong><br>
+                      <strong>ID:</strong> ${ticket._id.toString().slice(0, 8).toUpperCase()}<br>
+                      <strong>Title:</strong> ${ticket.title}<br>
+                      <strong>Status:</strong> Under Review<br>
+                      <strong>Created:</strong> ${new Date(ticket.createdAt).toLocaleDateString()}<br>
+                      <strong>Priority:</strong> ${aiResult?.priority || "Being assessed"}<br>
+                      <strong>Department:</strong> ${aiResult?.department || "Being assessed"}
+                    </div>
+                    ${responseSection}
+                    <p>Best regards,<br>AI Ticket Assistant Team</p>
+                  </div>
+                  <div class="footer">
+                    <p>&copy; 2024 AI Ticket Assistant. All rights reserved.</p>
+                  </div>
+                </div>
+              </body>
+            </html>
+          `;
+          await sendMail(
+            ticketCreator.email,
+            `Ticket Confirmed - #${ticket._id.toString().slice(0, 8).toUpperCase()}`,
+            confirmationEmail
+          );
+          console.log(`✅ Confirmation email sent to ${ticketCreator.email}`);
+        } catch (error) {
+          console.error(`❌ Failed to send confirmation email:`, error.message);
         }
       });
 
@@ -215,13 +249,8 @@ export const onTicketCreated = inngest.createFunction(
                       </div>
                       ${aiResult.ticketType ? `<p><strong>Type:</strong> ${aiResult.ticketType}</p>` : ""}
                       ${aiResult.department ? `<p><strong>Department:</strong> ${aiResult.department}</p>` : ""}
-                      ${aiResult.similarTickets && aiResult.similarTickets.length > 0
-                        ? `<div class="notes"><strong>Similar past tickets:</strong><br>
-                            ${aiResult.similarTickets.map((t, i) =>
-                              `<p><strong>#${i+1}:</strong> ${t.title} (${Math.round(t.score*100)}% match)<br>
-                              ${t.response ? `<em>${t.response.substring(0, 120)}...</em>` : ""}</p>`
-                            ).join("")}
-                          </div>`
+                      ${finalTicket.helpfulNotes
+                        ? `<div class="notes"><strong>Helpful notes:</strong><br><pre style="white-space:pre-wrap;margin:0;">${finalTicket.helpfulNotes}</pre></div>`
                         : ""}
                       <p>Please review the ticket and respond to the customer as soon as possible.</p>
                       <p>Best regards,<br>AI Ticket Assistant Team</p>

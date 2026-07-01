@@ -7,6 +7,11 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+if (!process.env.QDRANT_URL || !process.env.QDRANT_API_KEY) {
+  console.error("Missing QDRANT_URL or QDRANT_API_KEY in .env");
+  process.exit(1);
+}
+
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { pipeline } from "@xenova/transformers";
 import fs from "fs";
@@ -16,7 +21,13 @@ const COLLECTION = "tickets";
 const VECTOR_SIZE = 384;
 const BATCH_SIZE = 50;
 
-const client = new QdrantClient({ url: process.env.QDRANT_URL || "http://localhost:6333", checkCompatibility: false });
+// const client = new QdrantClient({ url: process.env.QDRANT_URL || "http://localhost:6333", checkCompatibility: false });
+
+const client = new QdrantClient({
+  url: process.env.QDRANT_URL,
+  apiKey: process.env.QDRANT_API_KEY,
+  checkCompatibility: false,
+});
 
 async function seed() {
   console.log("Starting Qdrant seed...");

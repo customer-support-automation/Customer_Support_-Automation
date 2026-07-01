@@ -10,7 +10,7 @@ const generateOtp = () => {
 };
 
 export const signup = async (req, res) => {
-  const { email, password, skills = [] } = req.body;
+  const { email, password } = req.body;
   try {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -27,7 +27,6 @@ export const signup = async (req, res) => {
     const user = await User.create({ 
       email, 
       password: hashed, 
-      skills,
       otp,
       otpExpiry,
       isVerified: false
@@ -190,7 +189,7 @@ export const logout = async (req, res) => {
 };
 
 export const updateUser = async (req, res) => {
-  const { skills = [], role, email } = req.body;
+  const { role, email } = req.body;
   try {
     if (req.user?.role !== "admin") {
       return res.status(403).json({ error: "Forbidden" });
@@ -200,7 +199,7 @@ export const updateUser = async (req, res) => {
 
     await User.updateOne(
       { email },
-      { skills: skills.length ? skills : user.skills, role }
+      { role }
     );
     return res.json({ message: "User updated successfully" });
   } catch (error) {

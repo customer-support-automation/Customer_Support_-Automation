@@ -5,7 +5,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({ role: "", skills: "" });
+  const [formData, setFormData] = useState({ role: "" });
   const [searchQuery, setSearchQuery] = useState("");
 
   const token = localStorage.getItem("token");
@@ -37,7 +37,6 @@ export default function AdminPanel() {
     setEditingUser(user.email);
     setFormData({
       role: user.role,
-      skills: user.skills?.join(", "),
     });
   };
 
@@ -54,10 +53,6 @@ export default function AdminPanel() {
           body: JSON.stringify({
             email: editingUser,
             role: formData.role,
-            skills: formData.skills
-              .split(",")
-              .map((skill) => skill.trim())
-              .filter(Boolean),
           }),
         }
       );
@@ -69,7 +64,7 @@ export default function AdminPanel() {
       }
 
       setEditingUser(null);
-      setFormData({ role: "", skills: "" });
+      setFormData({ role: "" });
       fetchUsers();
     } catch (err) {
       console.error("Update failed", err);
@@ -105,12 +100,6 @@ export default function AdminPanel() {
           <p className="text-sm text-gray-700">
             <span className="font-medium text-gray-900">Current Role:</span> {user.role}
           </p>
-          <p className="text-sm text-gray-700">
-            <span className="font-medium text-gray-900">Skills:</span>{" "}
-            {user.skills && user.skills.length > 0
-              ? user.skills.join(", ")
-              : "N/A"}
-          </p>
 
           {editingUser === user.email ? (
             <div className="mt-4 space-y-2">
@@ -125,16 +114,6 @@ export default function AdminPanel() {
                 <option value="moderator">Moderator</option>
                 <option value="admin">Admin</option>
               </select>
-
-              <input
-                type="text"
-                placeholder="Comma-separated skills"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                value={formData.skills}
-                onChange={(e) =>
-                  setFormData({ ...formData, skills: e.target.value })
-                }
-              />
 
               <div className="flex gap-2">
                 <button

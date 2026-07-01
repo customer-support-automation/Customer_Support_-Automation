@@ -44,13 +44,20 @@ export const getTickets = async (req, res) => {
   try {
     const user = req.user;
     let tickets = [];
-      if (user.role !== "user") {
+
+    if (user.role === "admin") {
       tickets = await Ticket.find({})
+        .select("title description status createdAt priority assignedTo ticketType department helpfulNotes generatedResponse resolutionNote resolvedAt")
+        .populate("assignedTo", ["email", "_id"])
+        .sort({ createdAt: -1 });
+    } else if (user.role === "moderator") {
+      tickets = await Ticket.find({ assignedTo: user._id })
+        .select("title description status createdAt priority assignedTo ticketType department helpfulNotes generatedResponse resolutionNote resolvedAt")
         .populate("assignedTo", ["email", "_id"])
         .sort({ createdAt: -1 });
     } else {
       tickets = await Ticket.find({ createdBy: user._id })
-        .select("title description status createdAt")
+        .select("title description status createdAt priority")
         .sort({ createdAt: -1 });
     }
     return res.status(200).json(tickets);
@@ -63,7 +70,6 @@ export const getTickets = async (req, res) => {
 export const getTicket = async (req, res) => {
   try {
     const user = req.user;
-    let ticket;
     const { id } = req.params;
 
     // console.log("Request to fetch ticket id:", id, "by user:", user?._id);
@@ -85,21 +91,29 @@ export const getTicket = async (req, res) => {
     //   }).select("title description status createdAt");
     // }
 
-    if (user.role !== "user") {
-    ticket = await Ticket.findById(id).populate("assignedTo", [
-      "email",
-      "_id",
-    ]);
-  } else {
-    ticket = await Ticket.findOne({
-      createdBy: user._id,
-      _id: id,
-    }).select("title description status createdAt priority assignedTo ticketType department similarTickets resolutionNote resolvedAt");
-    // console.log("Logged-in User ID (req.user._id):", user._id.toString());
-    // console.log("Ticket ID from params (id):", id);
-  }
+    let ticket;
 
-    // console.log("Ticket lookup result for id", id, ":", !!ticket);
+    if (user.role === "admin") {
+      ticket = await Ticket.findById(id)
+        .select("title description status createdAt priority assignedTo ticketType department helpfulNotes generatedResponse resolutionNote resolvedAt createdBy")
+        .populate("assignedTo", ["email", "_id"])
+        .populate("createdBy", ["email", "_id"]);
+    } else if (user.role === "moderator") {
+      ticket = await Ticket.findOne({
+        _id: id,
+        assignedTo: user._id,
+      })
+        .select("title description status createdAt priority assignedTo ticketType department helpfulNotes generatedResponse resolutionNote resolvedAt createdBy")
+        .populate("assignedTo", ["email", "_id"])
+        .populate("createdBy", ["email", "_id"]);
+    } else {
+      ticket = await Ticket.findOne({
+        createdBy: user._id,
+        _id: id,
+      })
+        .select("title description status createdAt priority assignedTo ticketType department generatedResponse resolvedAt")
+        .populate("assignedTo", ["email", "_id"]);
+    }
 
     if (!ticket) {
       return res.status(404).json({ message: "Ticket not found" });
@@ -127,6 +141,14 @@ export const resolveTicket = async (req, res) => {
 
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: "Invalid ticket id" });
+    }
+
+    const existingTicket = await Ticket.findById(id);
+    if (!existingTicket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+    if (existingTicket.status === "RESOLVED") {
+      return res.status(400).json({ message: "This ticket is already resolved and cannot be modified. Please create a new ticket." });
     }
 
     const ticket = await Ticket.findByIdAndUpdate(

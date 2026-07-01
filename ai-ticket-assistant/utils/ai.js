@@ -8,14 +8,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TICKET_TYPES = ["Incident", "Request", "Problem", "Change"];
 
 const DEPARTMENTS = [
-  "Technical Support",
-  "Billing",
-  "Account Management",
+  "Billing and Payments",
+  "Customer Service",
+  "General Inquiry",
+  "Human Resources",
+  "IT Support",
+  "Product Support",
   "Returns and Exchanges",
-  "General Enquiry",
-  "Security",
-  "Network Operations",
-  "Software Support",
+  "Sales and Pre-Sales",
+  "Service Outages and Maintenance",
+  "Technical Support",
+  "Unclassified",
 ];
 
 const PRIORITY_LABELS = ["low", "medium", "high"];
@@ -33,12 +36,17 @@ let _priorityDisabled = false;
 
 async function getClassifier() {
   if (!_classifier) {
-    console.log("Loading NLI classifier (first load ~15s)...");
-    _classifier = await pipeline(
-      "zero-shot-classification",
-      "Xenova/nli-MiniLM-L2-mnli"
-    );
-    console.log("Classifier ready");
+    try {
+      console.log("Loading NLI classifier...");
+      _classifier = await pipeline(
+        "zero-shot-classification",
+        "Xenova/distilbert-base-uncased-mnli"
+      );
+      console.log("NLI classifier ready");
+    } catch (err) {
+      console.error("CLASSIFIER LOAD FAILED:", err.message);
+      _classifier = null;
+    }
   }
   return _classifier;
 }
@@ -165,6 +173,15 @@ export async function embedText(text) {
 const classifyTicket = async (ticket) => {
   try {
     const clf = await getClassifier();
+    if (!clf) {
+      console.warn("Classifier unavailable — using defaults");
+      return {
+        ticketType: "Request",
+        department: "Unclassified",
+        priority: "medium",
+      };
+    }
+
     const text = `${ticket.title} ${ticket.description}`;
 
     const [typeResult, deptResult, priority] = await Promise.all([
@@ -175,14 +192,15 @@ const classifyTicket = async (ticket) => {
 
     const ticketType = typeResult.labels[0];
     const department = deptResult.labels[0];
-
-    console.log(
-      `Classified: Type=${ticketType}, Dept=${department}, Priority=${priority}`
-    );
+    console.log(`Classified: Type=${ticketType}, Dept=${department}, Priority=${priority}`);
     return { ticketType, department, priority };
   } catch (err) {
     console.error("classifyTicket failed:", err.message);
-    return { ticketType: "Request", department: null, priority: "medium" };
+    return {
+      ticketType: "Request",
+      department: "Unclassified",
+      priority: "medium",
+    };
   }
 };
 

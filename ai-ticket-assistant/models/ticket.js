@@ -23,7 +23,8 @@ const ticketSchema = new mongoose.Schema({
   deadline: Date,
 
   // Kept for backward compat with existing data — no longer populated by AI
-  helpfulNotes: String,
+  helpfulNotes: { type: String, default: null },
+  generatedResponse: { type: String, default: null },
   relatedSkills: [String],
 
   // NEW — AI classification outputs (replaces Gemini free-form output)
